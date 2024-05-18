@@ -5,6 +5,14 @@ import { IERC6551L2Registry } from "./interfaces/IERC6551L2Registry.sol";
 import { IERC6551L2Account } from "./interfaces/IERC6551L2Account.sol";
 
 contract ERC6551L2Registry is IERC6551L2Registry {
+    error ReceiverNotAllowlisted(address receiver);
+
+    mapping(address user => mapping(address receiver => bool)) public allowlistedBridge;
+
+    function setAllowistedBridge(address receiver, bool flag) public {
+        allowlistedBridge[msg.sender][receiver] = flag;
+    }
+
     function createAccount(
         address implementation,
         bytes32 salt,
@@ -16,6 +24,7 @@ contract ERC6551L2Registry is IERC6551L2Registry {
         override
         returns (address result)
     {
+        if (!allowlistedBridge[owner][msg.sender]) revert ReceiverNotAllowlisted(msg.sender);
         uint256 chainId = 1;
         assembly {
             // Silence unused variable warnings
@@ -72,7 +81,7 @@ contract ERC6551L2Registry is IERC6551L2Registry {
 
                 if iszero(call(gas(), mload(add(m, 0x6c)), 0, add(m, 0x1c), 0x44, m, 0x20)) {
                     if returndatasize() {
-                    // Bubble up the revert if the call reverts.
+                        // Bubble up the revert if the call reverts.
                         returndatacopy(m, 0x00, returndatasize())
                         revert(m, returndatasize())
                     }
@@ -89,7 +98,7 @@ contract ERC6551L2Registry is IERC6551L2Registry {
 
                 if iszero(call(gas(), shr(96, shl(96, computed)), 0, add(m, 0x1c), 0x44, m, 0x20)) {
                     if returndatasize() {
-                    // Bubble up the revert if the call reverts.
+                        // Bubble up the revert if the call reverts.
                         returndatacopy(m, 0x00, returndatasize())
                         revert(m, returndatasize())
                     }

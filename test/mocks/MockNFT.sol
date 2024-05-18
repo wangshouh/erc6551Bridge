@@ -8,7 +8,7 @@ contract MockNFT is MockERC721 {
         initialize(name_, symbol_);
     }
 
-    function mint(uint256 id) public {
-        _mint(msg.sender, id);
+    function mint(address receiver, uint256 id) public {
+        _mint(receiver, id);
     }
 }

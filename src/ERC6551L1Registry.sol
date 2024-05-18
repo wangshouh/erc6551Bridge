@@ -1,37 +1,39 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import { IERC6551Registry } from "./interfaces/IERC6551Registry.sol";
+import { IERC6551L1Registry } from "./interfaces/IERC6551L1Registry.sol";
 
-contract ERC6551Registry is IERC6551Registry {
-    function createAccount(
-        address implementation,
-        bytes32 salt,
-        uint256 chainId,
-        address tokenContract,
-        uint256 tokenId
-    )
-        public
-        override
-        returns (address result)
-    {
+contract ERC6551L1Registry is IERC6551L1Registry {
+    address public immutable implementation;
+    uint256 public immutable chainId;
+    bytes32 public constant salt = keccak256("l1");
+
+    constructor(address _impl) {
+        implementation = _impl;
+        chainId = block.chainid;
+    }
+
+    function createAccount(address tokenContract, uint256 tokenId) public override returns (address result) {
+        address _implementation = implementation;
+        bytes32 _salt = salt;
+        uint256 _chainId = chainId;
         assembly {
             // Silence unused variable warnings
             let m := mload(0x40) // Grab the free memory pointer.
-            pop(chainId)
+            // pop(chainId)
 
             mstore(add(m, 0xec), tokenId)
             mstore(add(m, 0xcc), tokenContract)
-            mstore(add(m, 0xac), chainId)
-            mstore(add(m, 0x8c), salt)
+            mstore(add(m, 0xac), _chainId)
+            mstore(add(m, 0x8c), _salt)
             mstore(add(m, 0x6c), 0x5af43d82803e903d91602b57fd5bf3) // ERC-1167 footer
-            mstore(add(m, 0x5d), implementation) // implementation
+            mstore(add(m, 0x5d), _implementation) // implementation
             mstore(add(m, 0x49), 0x3d60ad80600a3d3981f3363d3d373d3d3d363d73) // ERC-1167 constructor + header
 
             // Copy create2 computation data to memory
             mstore(add(m, 0x35), keccak256(add(m, 0x55), 0xb7)) // keccak256(bytecode)
             mstore(add(m, 0x01), shl(96, address())) // registry address
-            mstore(add(m, 0x15), salt) // salt
+            mstore(add(m, 0x15), _salt) // salt
             mstore8(m, 0xff) // 0xFF
 
             // Compute account address
@@ -41,7 +43,7 @@ contract ERC6551Registry is IERC6551Registry {
             switch iszero(extcodesize(computed))
             case 1 {
                 // Deploy account contract
-                let deployed := create2(0, add(m, 0x55), 0xb7, salt)
+                let deployed := create2(0, add(m, 0x55), 0xb7, _salt)
 
                 // Revert if the deployment fails
                 if iszero(deployed) {
@@ -58,7 +60,7 @@ contract ERC6551Registry is IERC6551Registry {
                     0x60,
                     // `ERC6551AccountCreated(address,address,bytes32,uint256,address,uint256)`
                     0x79f19b3655ee38b1ce526556b7731a20c8f218fbda4a3990b6cc4172fdf88722,
-                    implementation,
+                    _implementation,
                     tokenContract,
                     tokenId
                 )
@@ -75,35 +77,26 @@ contract ERC6551Registry is IERC6551Registry {
         }
     }
 
-    function account(
-        address implementation,
-        bytes32 salt,
-        uint256 chainId,
-        address tokenContract,
-        uint256 tokenId
-    )
-        external
-        view
-        override
-        returns (address)
-    {
+    function account(address tokenContract, uint256 tokenId) external view override returns (address) {
+        address _implementation = implementation;
+        bytes32 _salt = salt;
         assembly {
             // Silence unused variable warnings
-            pop(chainId)
+            // pop(chainId)
             pop(tokenContract)
             pop(tokenId)
 
             // Copy bytecode + constant data to memory
             calldatacopy(0x8c, 0x24, 0x80) // salt, chainId, tokenContract, tokenId
             mstore(0x6c, 0x5af43d82803e903d91602b57fd5bf3) // ERC-1167 footer
-            mstore(0x5d, implementation) // implementation
+            mstore(0x5d, _implementation) // implementation
             mstore(0x49, 0x3d60ad80600a3d3981f3363d3d373d3d3d363d73) // ERC-1167 constructor + header
 
             // Copy create2 computation data to memory
             mstore8(0x00, 0xff) // 0xFF
 
             mstore(0x01, shl(96, address())) // registry address
-            mstore(0x15, salt) // salt
+            mstore(0x15, _salt) // salt
             mstore(0x35, keccak256(0x55, 0xb7)) // keccak256(bytedcode)
 
             // Store computed account address in memory

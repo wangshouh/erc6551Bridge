@@ -14,7 +14,7 @@ contract ERC6551L2Account is ERC6551, Initializable {
         if (msg.sender != factory) revert NotFactory(msg.sender);
         _;
     }
-    
+
     function init(address factory_, address owner_) external initializer {
         factory = factory_;
         _owner = owner_;

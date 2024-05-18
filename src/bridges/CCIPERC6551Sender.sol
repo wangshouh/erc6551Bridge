@@ -6,40 +6,49 @@ import { Client } from "@chainlink/contracts-ccip/src/v0.8/ccip/libraries/Client
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Initializable } from "solady/src/utils/Initializable.sol";
+import { IERC6551L1Registry } from "src/interfaces/IERC6551L1Registry.sol";
+import { IERC6551L1Account } from "src/interfaces/IERC6551L1Account.sol";
 
 contract CCIPERC6551Sender is Initializable {
     using SafeERC20 for IERC20;
 
+    error NotOwner(address);
     // Event emitted when a message is sent to another chain.
     // The chain selector of the destination chain.
     // The address of the receiver on the destination chain.
     // the token address used to pay CCIP fees.
+
     event MessageSent( // The unique ID of the CCIP message.
         bytes32 indexed messageId,
         uint64 indexed destinationChainSelector,
         address receiver,
         address feeToken,
         uint256 fees,
-        address owner,
         address nft,
         uint256 tokenId
     );
 
     address public ccipRouter;
     address public ccipReceiver;
+    address public erc6551Registry;
     IERC20 private s_linkToken;
 
     /// @notice Constructor initializes the contract with the router address.
     /// @param _router The address of the router contract.
     /// @param _link The address of the link contract.
-    function init(address _router, address _ccipReceiver, address _link) public initializer {
+    function init(address _router, address _ccipReceiver, address _link, address _registry) public initializer {
         s_linkToken = IERC20(_link);
         ccipRouter = _router;
         ccipReceiver = _ccipReceiver;
+        erc6551Registry = _registry;
         s_linkToken.approve(address(_router), type(uint256).max);
     }
 
     function createAccount(address owner, address nft, uint256 tokenId, bytes calldata extraArgs) external {
+        address erc6551Account = IERC6551L1Registry(erc6551Registry).createAccount(nft, tokenId);
+
+        if (IERC6551L1Account(payable(erc6551Account)).owner() != msg.sender) revert NotOwner(msg.sender);
+
         uint64 _destinationChainSelector = abi.decode(extraArgs, (uint64));
         // Create an EVM2AnyMessage struct in memory with necessary information for sending a cross-chain message
         Client.EVM2AnyMessage memory evm2AnyMessage =
@@ -57,9 +66,7 @@ contract CCIPERC6551Sender is Initializable {
         bytes32 messageId = router.ccipSend(_destinationChainSelector, evm2AnyMessage);
 
         // Emit an event with message details
-        emit MessageSent(
-            messageId, _destinationChainSelector, ccipReceiver, address(s_linkToken), fees, owner, nft, tokenId
-        );
+        emit MessageSent(messageId, _destinationChainSelector, ccipReceiver, address(s_linkToken), fees, nft, tokenId);
     }
 
     function _buildCCIPMessage(

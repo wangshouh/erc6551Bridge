@@ -21,6 +21,10 @@ contract ERC6551L2AccountTest is Test {
 
     function test_createAccount() public {
         address accountOwner = vm.addr(1);
+        vm.startPrank(accountOwner);
+        registry.setAllowistedBridge(address(this), true);
+        vm.stopPrank();
+
         address payable erc6551Account =
             payable(registry.createAccount(address(account), keccak256("test"), address(1), 1, accountOwner));
 
@@ -29,6 +33,9 @@ contract ERC6551L2AccountTest is Test {
 
     function test_AccountCall() public {
         address accountOwner = vm.addr(1);
+        vm.startPrank(accountOwner);
+        registry.setAllowistedBridge(address(this), true);
+        vm.stopPrank();
         address payable erc6551Account =
             payable(registry.createAccount(address(account), keccak256("test"), address(1), 1, accountOwner));
 

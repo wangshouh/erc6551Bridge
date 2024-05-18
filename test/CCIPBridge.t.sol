@@ -8,8 +8,11 @@ import { LinkToken } from "chainlink-local/src/shared/LinkToken.sol";
 import { CCIPERC6551Sender } from "src/bridges/CCIPERC6551Sender.sol";
 import { CCIPERC6551Receiver } from "src/bridges/CCIPERC6551Receiver.sol";
 import { CreateX } from "createx/src/CreateX.sol";
+import { ERC6551Account } from "src/ERC6551Account.sol";
 import { ERC6551L2Account } from "src/ERC6551L2Account.sol";
 import { ERC6551L2Registry } from "src/ERC6551L2Registry.sol";
+import { ERC6551L1Registry } from "src/ERC6551L1Registry.sol";
+import { MockNFT } from "./mocks/MockNFT.sol";
 
 contract CCIPBridgeTest is Test {
     CreateX public createX;
@@ -19,15 +22,22 @@ contract CCIPBridgeTest is Test {
     IRouterClient public sourceRouter;
     IRouterClient public destinationRouter;
     LinkToken public linkToken;
+    ERC6551Account public l1Account;
+    ERC6551L1Registry public l1Registry;
     ERC6551L2Account public l2Account;
     ERC6551L2Registry internal l2Registry;
+    MockNFT internal nft;
     uint64 public chainSelector;
 
     function setUp() public {
         ccipLocalSimulator = new CCIPLocalSimulator();
+        l1Account = new ERC6551Account();
+        l1Registry = new ERC6551L1Registry(address(l1Account));
         l2Account = new ERC6551L2Account();
         l2Registry = new ERC6551L2Registry();
         createX = new CreateX();
+
+        nft = new MockNFT("NFT", "NFT");
 
         CreateX.Values memory values;
 
@@ -64,29 +74,39 @@ contract CCIPBridgeTest is Test {
                 senderSalt,
                 senderCode,
                 abi.encodeWithSignature(
-                    "init(address,address,address)", address(sourceRouter), computeReceiverAddress, address(linkToken)
+                    "init(address,address,address,address)",
+                    address(sourceRouter),
+                    computeReceiverAddress,
+                    address(linkToken),
+                    address(l1Registry)
                 ),
                 values
             )
         );
         sender = CCIPERC6551Sender(senderDeployAddress);
         ccipLocalSimulator.requestLinkFromFaucet(address(this), 100 ether);
+        ccipLocalSimulator.requestLinkFromFaucet(address(1), 100 ether);
+        ccipLocalSimulator.requestLinkFromFaucet(address(11), 100 ether);
     }
 
     function test_Send() public {
         linkToken.approve(address(sender), 100 ether);
-        sender.createAccount(address(1), address(2), 5, abi.encode(chainSelector));
-        // (, address owner, address nft, uint256 tokenId) = receiver.getLastReceivedMessageDetails();
-        ERC6551L2Account l2TestAccount = ERC6551L2Account(payable(l2Registry.account(address(l2Account), keccak256("l2"), 1, address(2), 5)));
-        assertEq(l2TestAccount.owner(), address(1));
+        nft.mint(address(1), 5);
 
-        sender.createAccount(address(11), address(2), 5, abi.encode(chainSelector));
-        l2TestAccount = ERC6551L2Account(payable(l2Registry.account(address(l2Account), keccak256("l2"), 1, address(2), 5)));
-        assertEq(l2TestAccount.owner(), address(11));
+        vm.startPrank(address(1));
+        linkToken.approve(address(sender), 100 ether);
+        l1Registry.createAccount(address(nft), 5);
+        l2Registry.setAllowistedBridge(address(receiver), true);
+        sender.createAccount(address(1), address(nft), 5, abi.encode(chainSelector));
+        vm.stopPrank();
+
+        ERC6551L2Account l2TestAccount =
+            ERC6551L2Account(payable(l2Registry.account(address(l2Account), keccak256("l2"), 1, address(nft), 5)));
+        assertEq(l2TestAccount.owner(), address(1));
     }
 
     function test_dupInit() public {
         vm.expectRevert();
-        sender.init(address(sourceRouter), address(receiver), address(linkToken));
+        sender.init(address(sourceRouter), address(receiver), address(linkToken), address(l1Registry));
     }
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-interface IERC6551Registry {
+interface IERC6551L1Registry {
     /**
      * @dev The registry MUST emit the ERC6551AccountCreated event upon successful account creation.
      */
@@ -28,29 +28,12 @@ interface IERC6551Registry {
      *
      * @return account The address of the token bound account
      */
-    function createAccount(
-        address implementation,
-        bytes32 salt,
-        uint256 chainId,
-        address tokenContract,
-        uint256 tokenId
-    )
-        external
-        returns (address account);
+    function createAccount(address tokenContract, uint256 tokenId) external returns (address account);
 
     /**
      * @dev Returns the computed token bound account address for a non-fungible token.
      *
      * @return account The address of the token bound account
      */
-    function account(
-        address implementation,
-        bytes32 salt,
-        uint256 chainId,
-        address tokenContract,
-        uint256 tokenId
-    )
-        external
-        view
-        returns (address account);
+    function account(address tokenContract, uint256 tokenId) external view returns (address account);
 }
